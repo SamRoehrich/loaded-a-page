@@ -1,6 +1,6 @@
 /*
 This program was created by me to help answer a simple product question
-"Does the feature have enough page views to justify its existance" or "How many users can we expect to see this feature"
+"How many users can we expect to see this feature"
 
 It takes a CSV of `url`s as input as well as the number of days you want to measure page views of.
 It prints out the final result of all URL page views and writes each page view to a CSV file.
@@ -16,10 +16,37 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
 )
+
+type Query struct {
+	EventType string   `json:"event_type"`
+	Filters   []Filter `json:"filters"`
+	GroupBy   []string `json:"group_by"`
+}
+
+type Filter struct {
+	Type  string   `json:"subprop_type"`
+	Key   string   `json:"subprop_key"`
+	Op    string   `json:"subprop_op"`
+	Value []string `json:"subprop_value"`
+}
+
+type AmplitudeResponse struct {
+	Data AmplitudeData `json:"data"`
+}
+
+type AmplitudeData struct {
+	Series          [][]float64        `json:"series"`
+	SeriesCollapsed [][]CollapsedValue `json:"seriesCollapsed"`
+}
+
+type CollapsedValue struct {
+	Value float64 `json:"value"`
+}
 
 const amp = "https://amplitude.com/api/2/events/segmentation"
 
@@ -57,19 +84,6 @@ func main() {
 	fmt.Printf("Total: %d \n", t)
 }
 
-type Query struct {
-	EventType string   `json:"event_type"`
-	Filters   []Filter `json:"filters"`
-	GroupBy   []string `json:"group_by"`
-}
-
-type Filter struct {
-	Type  string   `json:"subprop_type"`
-	Key   string   `json:"subprop_key"`
-	Op    string   `json:"subprop_op"`
-	Value []string `json:"subprop_value"`
-}
-
 func fetch(url string, ch chan int) {
 	c := &http.Client{}
 	r, _ := http.NewRequest("GET", amp, nil)
@@ -82,7 +96,7 @@ func fetch(url string, ch chan int) {
 	endStr := end.Format(layout)
 
 	q := Query{
-		EventType: "_all",
+		EventType: "Loaded a Page",
 		Filters: []Filter{{
 			Type:  "event",
 			Key:   "url",
@@ -110,6 +124,23 @@ func fetch(url string, ch chan int) {
 
 	res, _ := c.Do(r)
 
-	fmt.Printf("Status: %d\n", res.StatusCode)
-	ch <- len(url)
+	if res.StatusCode != 200 {
+		fmt.Println("Call failed for URL: ", url)
+		fmt.Printf("Status code: %d\n Error: %v\n", res.StatusCode, res.Status)
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Printf("Error reading response body: %v", err)
+		os.Exit(1)
+	}
+
+	var bJson AmplitudeResponse
+
+	err = json.Unmarshal(body, &bJson)
+	if err != nil {
+		fmt.Printf("Error parsing response: %v", err)
+		os.Exit(1)
+	}
+	ch <- len(bJson.Data.SeriesCollapsed)
 }

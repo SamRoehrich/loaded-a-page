@@ -122,13 +122,13 @@ func fetch(url string, ch chan float64) {
 
 	r.URL.RawQuery = params.Encode()
 
-	res, _ := c.Do(r)
+	var res *http.Response
+	res, _ = c.Do(r)
 
-	if res.StatusCode != 200 {
-		fmt.Println("Call failed for URL: ", url)
-		fmt.Printf("Status code: %d\nError: %v\n\n\n", res.StatusCode, res.Status)
-		ch <- 0
-		return
+	for res.StatusCode != 200 {
+		t := time.NewTimer(5 * time.Second)
+		<-t.C
+		res, _ = c.Do(r)
 	}
 
 	body, err := io.ReadAll(res.Body)

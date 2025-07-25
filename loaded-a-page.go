@@ -56,8 +56,8 @@ var s = flag.String("s", "", "amplitude secret")
 var d = flag.Int("d", 1, "days since time of exectuion")
 
 func main() {
-	var t int
-	ch := make(chan int)
+	var t float64
+	ch := make(chan float64)
 	flag.Parse()
 
 	file, err := os.Open(*f)
@@ -81,10 +81,10 @@ func main() {
 	for range len(urls) {
 		t += <-ch
 	}
-	fmt.Printf("Total: %d \n", t)
+	fmt.Printf("Total: %v \n", t)
 }
 
-func fetch(url string, ch chan int) {
+func fetch(url string, ch chan float64) {
 	c := &http.Client{}
 	r, _ := http.NewRequest("GET", amp, nil)
 	e := base64.StdEncoding.EncodeToString([]byte(*k + ":" + *s))
@@ -126,7 +126,9 @@ func fetch(url string, ch chan int) {
 
 	if res.StatusCode != 200 {
 		fmt.Println("Call failed for URL: ", url)
-		fmt.Printf("Status code: %d\n Error: %v\n", res.StatusCode, res.Status)
+		fmt.Printf("Status code: %d\nError: %v\n\n\n", res.StatusCode, res.Status)
+		ch <- 0
+		return
 	}
 
 	body, err := io.ReadAll(res.Body)
@@ -142,5 +144,5 @@ func fetch(url string, ch chan int) {
 		fmt.Printf("Error parsing response: %v", err)
 		os.Exit(1)
 	}
-	ch <- len(bJson.Data.SeriesCollapsed)
+	ch <- float64(bJson.Data.SeriesCollapsed[0][0].Value)
 }
